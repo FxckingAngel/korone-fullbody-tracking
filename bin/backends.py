@@ -284,6 +284,17 @@ class VRChatOSCBackend(Backend):
     def _build_knee_rotation(self, hip, knee, ankle, lateral_hint):
         return build_knee_rotation(hip, knee, ankle, lateral_hint)
 
+    def _safe_send(self, message, label=None):
+        try:
+            self.client.send(message)
+            return True
+        except (BlockingIOError, OSError) as exc:
+            if label is not None:
+                print(f"WARNING: VRChat OSC send skipped for {label}: {exc}")
+            else:
+                print(f"WARNING: VRChat OSC send skipped: {exc}")
+            return False
+
     def _stabilize_vrchat_pelvis(self, transformed_pose, pose3d, visibility):
         hip_position = np.array(transformed_pose[6], dtype=float).copy()
 
@@ -308,8 +319,8 @@ class VRChatOSCBackend(Backend):
 
         torso_vec = pose3d[7] - pose3d[6]
         torso_upright = abs(safe_normalize(torso_vec, fallback=np.array([0.0, 1.0, 0.0]))[1])
-        correction_strength = float(np.clip((torso_upright - 0.55) / 0.35, 0.0, 1.0))
-        target_y = float(np.mean(targets))
+        correction_strength = float(np.clip((torso_upright - 0.45) / 0.3, 0.0, 1.0))
+        target_y = float(np.mean(targets)) + 0.06 * correction_strength
 
         if target_y > hip_position[1]:
             hip_position[1] = hip_position[1] * (1.0 - correction_strength) + target_y * correction_strength
@@ -335,12 +346,12 @@ class VRChatOSCBackend(Backend):
         )
 
         if self.pending_head_position_snap or params.osc_realign_now:
-            self.client.send(osc_build_msg("head", "position", pose_to_vrchat_position(head_anchor)))
-            self.pending_head_position_snap = False
+            if self._safe_send(osc_build_msg("head", "position", pose_to_vrchat_position(head_anchor)), "head-position"):
+                self.pending_head_position_snap = False
 
         if self.pending_head_rotation_snap or params.osc_realign_now:
-            self.client.send(osc_build_msg("head", "rotation", quat_to_vrchat_euler(head_rot)))
-            self.pending_head_rotation_snap = False
+            if self._safe_send(osc_build_msg("head", "rotation", quat_to_vrchat_euler(head_rot)), "head-rotation"):
+                self.pending_head_rotation_snap = False
 
         params.osc_realign_now = False
 
@@ -434,9 +445,15 @@ class VRChatOSCBackend(Backend):
                     pass
                 if len(trackers) > 0:
                     for tracker in trackers:
-                        self.client.send(osc_build_msg(tracker["name"], "position", tracker["position"]))
+                        self._safe_send(
+                            osc_build_msg(tracker["name"], "position", tracker["position"]),
+                            f"tracker-{tracker['name']}-position",
+                        )
                         if tracker.get("rotation") is not None:
-                            self.client.send(osc_build_msg(tracker["name"], "rotation", tracker["rotation"]))
+                            self._safe_send(
+                                osc_build_msg(tracker["name"], "rotation", tracker["rotation"]),
+                                f"tracker-{tracker['name']}-rotation",
+                            )
                     self.frames_without_trackers = 0
                 else:
                     self.frames_without_trackers += 1
