@@ -234,6 +234,8 @@ class VRChatOSCBackend(Backend):
         self.tracker_memory = {}
         self.pending_head_position_snap = True
         self.pending_head_rotation_snap = True
+        self.last_debug_time = 0.0
+        self.frames_without_trackers = 0
 
     def onparamchanged(self, params):
         pass
@@ -246,6 +248,9 @@ class VRChatOSCBackend(Backend):
         self.pending_head_position_snap = True
         self.pending_head_rotation_snap = True
         self.tracker_memory = {}
+        self.last_debug_time = time.time()
+        self.frames_without_trackers = 0
+        print(f"INFO: VRChat OSC target set to {params.backend_ip}:{params.backend_port}")
 
     def _smooth_tracker(self, name, position, rotation_deg, blend):
         if name not in self.tracker_memory:
@@ -393,7 +398,29 @@ class VRChatOSCBackend(Backend):
                     # Sending hand trackers unsupported
                     pass
                 if len(trackers) > 0:
-                    self.client.send(osc_build_bundle(trackers))
+                    for tracker in trackers:
+                        self.client.send(osc_build_msg(tracker["name"], "position", tracker["position"]))
+                        if tracker.get("rotation") is not None:
+                            self.client.send(osc_build_msg(tracker["name"], "rotation", tracker["rotation"]))
+                    self.frames_without_trackers = 0
+                else:
+                    self.frames_without_trackers += 1
+
+                now = time.time()
+                if now - self.last_debug_time > 2.0:
+                    self.last_debug_time = now
+                    avg_vis = float(np.mean(visibility)) if visibility is not None else 1.0
+                    if len(trackers) > 0:
+                        tracker_names = ", ".join(str(tracker["name"]) for tracker in trackers)
+                        print(
+                            f"INFO: Sent {len(trackers)} VRChat OSC trackers to "
+                            f"{params.backend_ip}:{params.backend_port} [{tracker_names}]"
+                        )
+                    else:
+                        print(
+                            "INFO: No VRChat OSC trackers were sent this frame window. "
+                            f"Avg visibility={avg_vis:.2f}, frames_without_trackers={self.frames_without_trackers}"
+                        )
 
             else:
                 # Preview skeleton unsupported
