@@ -236,6 +236,7 @@ class VRChatOSCBackend(Backend):
         self.pending_head_rotation_snap = True
         self.last_debug_time = 0.0
         self.frames_without_trackers = 0
+        self.send_extended_trackers = False
 
     def onparamchanged(self, params):
         pass
@@ -364,35 +365,36 @@ class VRChatOSCBackend(Backend):
                     base_smoothing,
                 )
 
-                chest_rotation = self._build_chest_rotation(pose3d)
-                self._queue_tracker(
-                    trackers,
-                    4,
-                    pose_to_vrchat_position(transformed_pose[7]),
-                    quat_to_vrchat_euler(chest_rotation),
-                    visibility_average(visibility, (7, 12, 13)),
-                    min(0.9, base_smoothing + 0.08),
-                )
+                if self.send_extended_trackers:
+                    chest_rotation = self._build_chest_rotation(pose3d)
+                    self._queue_tracker(
+                        trackers,
+                        4,
+                        pose_to_vrchat_position(transformed_pose[7]),
+                        quat_to_vrchat_euler(chest_rotation),
+                        visibility_average(visibility, (7, 12, 13)),
+                        min(0.9, base_smoothing + 0.08),
+                    )
 
-                hip_span = pose3d[3] - pose3d[2]
-                right_knee_rot = self._build_knee_rotation(pose3d[3], pose3d[4], pose3d[5], hip_span)
-                left_knee_rot = self._build_knee_rotation(pose3d[2], pose3d[1], pose3d[0], -hip_span)
-                self._queue_tracker(
-                    trackers,
-                    5,
-                    pose_to_vrchat_position(transformed_pose[4]),
-                    quat_to_vrchat_euler(right_knee_rot),
-                    visibility_average(visibility, (3, 4, 5)),
-                    min(0.92, base_smoothing + 0.12),
-                )
-                self._queue_tracker(
-                    trackers,
-                    6,
-                    pose_to_vrchat_position(transformed_pose[1]),
-                    quat_to_vrchat_euler(left_knee_rot),
-                    visibility_average(visibility, (0, 1, 2)),
-                    min(0.92, base_smoothing + 0.12),
-                )
+                    hip_span = pose3d[3] - pose3d[2]
+                    right_knee_rot = self._build_knee_rotation(pose3d[3], pose3d[4], pose3d[5], hip_span)
+                    left_knee_rot = self._build_knee_rotation(pose3d[2], pose3d[1], pose3d[0], -hip_span)
+                    self._queue_tracker(
+                        trackers,
+                        5,
+                        pose_to_vrchat_position(transformed_pose[4]),
+                        quat_to_vrchat_euler(right_knee_rot),
+                        visibility_average(visibility, (3, 4, 5)),
+                        min(0.92, base_smoothing + 0.12),
+                    )
+                    self._queue_tracker(
+                        trackers,
+                        6,
+                        pose_to_vrchat_position(transformed_pose[1]),
+                        quat_to_vrchat_euler(left_knee_rot),
+                        visibility_average(visibility, (0, 1, 2)),
+                        min(0.92, base_smoothing + 0.12),
+                    )
 
                 if params.use_hands:
                     # Sending hand trackers unsupported
