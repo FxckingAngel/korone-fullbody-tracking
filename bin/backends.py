@@ -284,6 +284,38 @@ class VRChatOSCBackend(Backend):
     def _build_knee_rotation(self, hip, knee, ankle, lateral_hint):
         return build_knee_rotation(hip, knee, ankle, lateral_hint)
 
+    def _stabilize_vrchat_pelvis(self, transformed_pose, pose3d, visibility):
+        hip_position = np.array(transformed_pose[6], dtype=float).copy()
+
+        left_leg_len = np.linalg.norm(pose3d[2] - pose3d[1]) + np.linalg.norm(pose3d[1] - pose3d[0])
+        right_leg_len = np.linalg.norm(pose3d[3] - pose3d[4]) + np.linalg.norm(pose3d[4] - pose3d[5])
+
+        targets = []
+        for foot_idx, leg_len, vis_indices in (
+            (0, left_leg_len, (0, 1, 2)),
+            (5, right_leg_len, (3, 4, 5)),
+        ):
+            if visibility_average(visibility, vis_indices) < 0.45:
+                continue
+
+            foot_position = np.array(transformed_pose[foot_idx], dtype=float)
+            horizontal_distance = np.linalg.norm((hip_position - foot_position)[[0, 2]])
+            max_vertical = max(leg_len ** 2 - horizontal_distance ** 2, 0.0) ** 0.5
+            targets.append(foot_position[1] + max_vertical)
+
+        if not targets:
+            return hip_position
+
+        torso_vec = pose3d[7] - pose3d[6]
+        torso_upright = abs(safe_normalize(torso_vec, fallback=np.array([0.0, 1.0, 0.0]))[1])
+        correction_strength = float(np.clip((torso_upright - 0.55) / 0.35, 0.0, 1.0))
+        target_y = float(np.mean(targets))
+
+        if target_y > hip_position[1]:
+            hip_position[1] = hip_position[1] * (1.0 - correction_strength) + target_y * correction_strength
+
+        return hip_position
+
     def _maybe_send_head_alignment(self, params, transformed_pose, pose3d, visibility):
         head_vis = visibility_average(visibility, (7, 8, 9))
         if head_vis < 0.55:
@@ -336,11 +368,12 @@ class VRChatOSCBackend(Backend):
             if not params.preview_skeleton:
                 trackers = []
                 base_smoothing = float(np.clip(params.additional_smoothing * 0.6, 0.0, 0.8))
+                stabilized_hip_position = self._stabilize_vrchat_pelvis(transformed_pose, pose3d, visibility)
                 if not params.ignore_hip:
                     self._queue_tracker(
                         trackers,
                         1,
-                        pose_to_vrchat_position(transformed_pose[6]),
+                        pose_to_vrchat_position(stabilized_hip_position),
                         quat_to_vrchat_euler(rots[0]),
                         visibility_average(visibility, (2, 3, 6, 7)),
                         base_smoothing,
