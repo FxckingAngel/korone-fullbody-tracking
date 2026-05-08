@@ -56,6 +56,7 @@ class Parameters():
         self.euler_rot_z = 180
 
         self.posescale = 1     
+        self.osc_target_height = 1.78
 
         self.exit_ready = False
 
@@ -193,6 +194,7 @@ class Parameters():
         param["rotx"] = self.euler_rot_x
         param["rotz"] = self.euler_rot_z
         param["scale"] = self.posescale
+        param["osc_target_height"] = self.osc_target_height
         
         param["calibrot"] = self.calib_rot
         param["calibtilt"] = self.calib_tilt
@@ -229,6 +231,7 @@ class Parameters():
             self.euler_rot_x = param["rotx"]
             self.euler_rot_z = param["rotz"]
             self.posescale = param["scale"]
+            self.osc_target_height = param.get("osc_target_height", self.osc_target_height)
             
             self.calib_rot = param["calibrot"]
             self.calib_tilt = param["calibtilt"]

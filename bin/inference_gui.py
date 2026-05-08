@@ -390,13 +390,26 @@ class InferenceWindow(tk.Frame):
             
             print("INFO: Postcalib y value: ", value * 57.295779513)
 
-        if use_steamvr and self.params.calib_scale:
-            #calculate the height of the skeleton, calculate the height in steamvr as distance of hmd from the ground.
-            #divide the two to get scale 
+        if self.params.calib_scale:
+            # calculate skeleton height from current pose.
             skelSize = np.max(self.params.pose3d_og, axis=0)-np.min(self.params.pose3d_og, axis=0)
-            self.params.posescale = headsetpos[1]/skelSize[1]
+            skeleton_height = float(skelSize[1]) if skelSize[1] > 1e-6 else 0.0
 
-            self.set_scale_var()
+            if skeleton_height > 0.0:
+                if use_steamvr:
+                    # scale to HMD height above ground
+                    self.params.posescale = headsetpos[1] / skeleton_height
+                    print(f"INFO: SteamVR autocalibrated scale to {self.params.posescale:.3f}")
+                else:
+                    # OSC has no headset-ground reference, so scale the pose toward a normal standing height.
+                    self.params.posescale = self.params.osc_target_height / skeleton_height
+                    print(
+                        f"INFO: VRChat OSC autocalibrated scale to {self.params.posescale:.3f} "
+                        f"using target height {self.params.osc_target_height:.2f}m"
+                    )
+                self.set_scale_var()
+            else:
+                print("INFO: Could not autocalibrate scale because skeleton height was too small.")
 
         self.params.request_osc_realign()
         self.params.recalibrate = False
