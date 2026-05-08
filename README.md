@@ -56,4 +56,9 @@ Main launch files:
 - Camera tracking will never be identical to real hardware trackers, but this fork is aimed at closing the gap as much as possible.
 
 ## License
-Please review the existing [LICENSE](LICENSE) from the base project before redistribution or commercialization.
+This fork remains under the [MIT License](LICENSE).
+
+That means:
+- You can use, modify, publish, redistribute, and sell it.
+- You should keep the original MIT license notice from the base project.
+- This fork also includes copyright for fork modifications by `FxckingAngel`.
