@@ -237,6 +237,7 @@ class VRChatOSCBackend(Backend):
         self.last_debug_time = 0.0
         self.frames_without_trackers = 0
         self.send_extended_trackers = False
+        self.last_auto_scale_debug_time = 0.0
 
     def onparamchanged(self, params):
         pass
@@ -295,6 +296,24 @@ class VRChatOSCBackend(Backend):
                 print(f"WARNING: VRChat OSC send skipped: {exc}")
             return False
 
+    def _get_vrchat_pose_scale(self, params, pose3d):
+        pose_scale = float(params.posescale)
+
+        if params.calib_scale and pose_scale <= 1.01:
+            skeleton_bounds = np.max(pose3d, axis=0) - np.min(pose3d, axis=0)
+            skeleton_height = float(skeleton_bounds[1]) if skeleton_bounds[1] > 1e-6 else 0.0
+            if skeleton_height > 0.0:
+                pose_scale = float(params.osc_target_height / skeleton_height)
+                now = time.time()
+                if now - self.last_auto_scale_debug_time > 2.0:
+                    self.last_auto_scale_debug_time = now
+                    print(
+                        f"INFO: VRChat OSC runtime auto-scale using {pose_scale:.3f} "
+                        f"from target height {params.osc_target_height:.2f}m"
+                    )
+
+        return pose_scale
+
     def _maybe_send_head_alignment(self, params, transformed_pose, pose3d, visibility):
         head_vis = visibility_average(visibility, (7, 8, 9))
         if head_vis < 0.55:
@@ -339,7 +358,8 @@ class VRChatOSCBackend(Backend):
         if params.recalibrate:
             print("frame to recalibrate")
         else:
-            pose3d = pose3d * params.posescale     #rescale skeleton to calibrated height
+            pose_scale = self._get_vrchat_pose_scale(params, pose3d)
+            pose3d = pose3d * pose_scale     #rescale skeleton to calibrated height
             #print(pose3d)
             offset = pose3d[7] - (headsetpos+neckoffset)    #calculate the position of the skeleton
             transformed_pose = pose3d - offset
